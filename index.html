@@ -94,11 +94,50 @@
       border-radius: 4px;
       overflow: hidden;
       box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+      position: relative;
     }
 
+    /* TANLANGAN VA ENG YAXSHI YURISH KO'RSATKICHLARI */
     .highlight-best {
       box-shadow: inset 0 0 3px 3px #81b64c !important;
       background-color: rgba(129, 182, 76, 0.4) !important;
+    }
+    .highlight-selected {
+      background-color: rgba(241, 196, 15, 0.5) !important;
+    }
+    
+    /* YURISH MUMKIN BO'LGAN KATAKLARDAGI NUQTALAR */
+    .possible-move-dot {
+      position: relative;
+    }
+    .possible-move-dot::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 28%;
+      height: 28%;
+      background: rgba(0, 0, 0, 0.28);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 5;
+    }
+    .possible-capture-ring {
+      position: relative;
+    }
+    .possible-capture-ring::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 82%;
+      height: 82%;
+      border: 4px solid rgba(0, 0, 0, 0.28);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 5;
     }
 
     .panel {
@@ -259,7 +298,6 @@
 </head>
 <body>
 
-  <!-- TEPADAGI MUALLIF VA SARLAVHA PANELI -->
   <div class="top-bar">
     <span style="font-size: 13px; font-weight: 700; color: #dfe6e9;">♟ TELEGRAM SHAXMAT</span>
     <span class="author-badge">Dasturchi: Baxram Maxsudovich</span>
@@ -327,7 +365,6 @@
     </div>
   </div>
 
-  <!-- PASTKI MUALLIFLIK QISMI -->
   <div class="footer-author">
     Loyiha muallifi: <span>Reyimbayev Baxram Maxsudovich</span>
   </div>
@@ -346,14 +383,34 @@
     var userChosenColor = 'white';
     var socket = null;
 
+    // BOSISH (TAP/CLICK) ORQALI YURISH UCHUN HOLAT
+    var selectedSquare = null;
+
     function removeHighlights() {
-      $('#myBoard .square-55d63').removeClass('highlight-best');
+      $('#myBoard .square-55d63').removeClass('highlight-best highlight-selected possible-move-dot possible-capture-ring');
     }
 
     function highlightSquares(sq1, sq2) {
       removeHighlights();
       if (sq1) $('#myBoard .square-' + sq1).addClass('highlight-best');
       if (sq2) $('#myBoard .square-' + sq2).addClass('highlight-best');
+    }
+
+    // YURISH YO'LLARINI (NUQTALARNI) CHIQARISH
+    function showPossibleMoves(square) {
+      var moves = game.moves({ square: square, verbose: true });
+      if (moves.length === 0) return;
+
+      $('#myBoard .square-' + square).addClass('highlight-selected');
+
+      moves.forEach(function(m) {
+        var targetSquareEl = $('#myBoard .square-' + m.to);
+        if (m.captured) {
+          targetSquareEl.addClass('possible-capture-ring');
+        } else {
+          targetSquareEl.addClass('possible-move-dot');
+        }
+      });
     }
 
     function switchMode() {
@@ -371,22 +428,25 @@
       resetGame();
     }
 
-    function onDragStart(source, piece, position, orientation) {
+    function isMyTurn() {
       if (game.game_over()) return false;
       var mode = $('#gameMode').val();
       if (mode === 'bot') {
         var myTurnChar = (userChosenColor === 'white') ? 'w' : 'b';
-        if (game.turn() !== myTurnChar) return false;
+        return game.turn() === myTurnChar;
       }
+      return true;
     }
 
-    function onDrop(source, target) {
+    function executeMove(source, target) {
       var move = game.move({ from: source, to: target, promotion: 'q' });
-      if (move === null) return 'snapback';
+      if (move === null) return false;
 
       moveHistory.push(move.san);
       currentMoveIndex = moveHistory.length - 1;
       removeHighlights();
+      selectedSquare = null;
+      board.position(game.fen());
       renderMovesList();
       updateStatus();
 
@@ -396,11 +456,68 @@
       } else if (mode === 'online' && socket) {
         socket.send(JSON.stringify({ from: source, to: target }));
       }
+      return true;
+    }
+
+    // 1. DRAG & DROP (Sudrab yurish imkoniyati)
+    function onDragStart(source, piece, position, orientation) {
+      if (!isMyTurn()) return false;
+      // Faqat o'z donalarini ushlay olish
+      var pieceColor = piece.search(/^b/) !== -1 ? 'b' : 'w';
+      if (pieceColor !== game.turn()) return false;
+
+      selectedSquare = source;
+      removeHighlights();
+      showPossibleMoves(source);
+    }
+
+    function onDrop(source, target) {
+      var success = executeMove(source, target);
+      if (!success) {
+        removeHighlights();
+        selectedSquare = null;
+        return 'snapback';
+      }
     }
 
     function onSnapEnd() {
       board.position(game.fen());
     }
+
+    // 2. CLICK / TAP ORQALI YURISH
+    $(document).on('click', '#myBoard .square-55d63', function() {
+      if (!isMyTurn()) return;
+
+      var clickedSquare = $(this).attr('data-square');
+      if (!clickedSquare) return;
+
+      var piece = game.get(clickedSquare);
+
+      // Agar avval dona tanlangan bo'lsa va yangi bosilgan katak qonuniy yurish bo'lsa:
+      if (selectedSquare) {
+        if (selectedSquare === clickedSquare) {
+          // O'sha donani qayta bossa - tanlovni bekor qilish
+          selectedSquare = null;
+          removeHighlights();
+          return;
+        }
+
+        var isMoveSuccessful = executeMove(selectedSquare, clickedSquare);
+        if (isMoveSuccessful) {
+          return;
+        }
+      }
+
+      // Agar o'zining navbatidagi donasini bossa - yo'llarini ko'rsatish
+      if (piece && piece.color === game.turn()) {
+        selectedSquare = clickedSquare;
+        removeHighlights();
+        showPossibleMoves(clickedSquare);
+      } else {
+        selectedSquare = null;
+        removeHighlights();
+      }
+    });
 
     function makeBotMove() {
       var level = parseInt($('#botLevel').val());
@@ -594,6 +711,7 @@
       moveHistory = [];
       currentMoveIndex = -1;
       analysisData = null;
+      selectedSquare = null;
       removeHighlights();
       setEvalBar(0.0);
       $('#analysisCommentCard').hide();
