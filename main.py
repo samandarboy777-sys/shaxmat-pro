@@ -1,5 +1,6 @@
 import os
 import math
+import asyncio
 from typing import Dict, List
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import chess
 import chess.engine
+import httpx
 
 app = FastAPI()
 
@@ -18,7 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Agar Windows bo'lsa .exe, Linux (Render) bo'lsa tizim Stockfish'ini oladi
+# Stockfish yo'li (Windows va Linux/Render uchun)
 if os.path.exists("/usr/games/stockfish"):
     STOCKFISH_PATH = "/usr/games/stockfish"
 elif os.path.exists("/usr/bin/stockfish"):
@@ -26,6 +28,33 @@ elif os.path.exists("/usr/bin/stockfish"):
 else:
     STOCKFISH_PATH = os.path.join(os.path.dirname(__file__), "stockfish.exe")
 
+# ----------------- SERVERNI 24/7 UYG'OQ USHLAB TURISH (PING) ----------------- #
+# Render server bergan URL manzili (masalan: https://shaxmat-pro.onrender.com)
+RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "")
+
+async def keep_alive_ping():
+    await asyncio.sleep(30) # Server to'liq yonguncha kutish
+    while True:
+        try:
+            # Agar Render-da ishlayotgan bo'lsa o'ziga, bo'lmasa lokalga signal beradi
+            target_url = RENDER_EXTERNAL_URL if RENDER_EXTERNAL_URL else "http://127.0.0.1:10000"
+            async with httpx.AsyncClient() as client:
+                await client.get(f"{target_url}/ping", timeout=10.0)
+                print("[Keep-Alive] Ping muvaffaqiyatli yuborildi.")
+        except Exception as e:
+            print(f"[Keep-Alive] Ping xatosi: {e}")
+        # Har 5 daqiqada (300 soniya) qaytariladi
+        await asyncio.sleep(300)
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(keep_alive_ping())
+
+@app.get("/ping")
+def ping():
+    return {"status": "alive", "message": "Server faol ishlamoqda!"}
+
+# ----------------- 1. AI BILAN O'YIN (5 TA DARAJA) ----------------- #
 class MoveRequest(BaseModel):
     fen: str
     level: int
@@ -56,6 +85,7 @@ def bot_move(data: MoveRequest):
         "san": board.san(best_move)
     }
 
+# ----------------- 2. O'YIN TAHLILI (STOCKFISH) ----------------- #
 class AnalysisRequest(BaseModel):
     moves: List[str]
 
@@ -86,7 +116,6 @@ def generate_uz_comment(board_before, move, cat, is_check, is_capture, best_san)
 def analyze_game(data: AnalysisRequest):
     board = chess.Board()
     evaluations = []
-    
     white_diffs = []
     black_diffs = []
 
@@ -144,7 +173,6 @@ def analyze_game(data: AnalysisRequest):
             evaluations.append({
                 "index": idx,
                 "san": move_san,
-                "fen_before": board_before.fen(),
                 "fen": board.fen(),
                 "from": chess.square_name(move.from_square),
                 "to": chess.square_name(move.to_square),
@@ -167,6 +195,7 @@ def analyze_game(data: AnalysisRequest):
         "evaluations": evaluations
     }
 
+# ----------------- 3. REAL-TIME XONALAR (WEBSOCKETS) ----------------- #
 rooms: Dict[str, List[WebSocket]] = {}
 
 @app.websocket("/ws/{room_id}")
@@ -195,4 +224,5 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
         if not rooms[room_id]:
             del rooms[room_id]
 
+# Frontend statik fayllarini tarqatish
 app.mount("/", StaticFiles(directory=os.path.dirname(__file__), html=True), name="static")
