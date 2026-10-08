@@ -9,6 +9,16 @@ from pydantic import BaseModel
 import chess
 import chess.engine
 import httpx
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import CommandStart
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+
+# ==================== SOZLAMALAR VA BOT TOKEN ==================== #
+# O'zingizning @BotFather bergan bot tokeningizni shu yerga qo'ying:
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8927652673:AAGnNDYFug8WjzzyDGFIoiYkTu4iRfWEnqA")
+
+# Render bergan domeningiz (yoki avtomatik muhitdan oladi)
+RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "")
 
 app = FastAPI()
 
@@ -20,7 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Stockfish yo'li (Windows va Linux/Render uchun)
+# Stockfish dvigatelini aniqlash (Windows va Linux/Render uchun)
 if os.path.exists("/usr/games/stockfish"):
     STOCKFISH_PATH = "/usr/games/stockfish"
 elif os.path.exists("/usr/bin/stockfish"):
@@ -28,33 +38,70 @@ elif os.path.exists("/usr/bin/stockfish"):
 else:
     STOCKFISH_PATH = os.path.join(os.path.dirname(__file__), "stockfish.exe")
 
-# ----------------- SERVERNI 24/7 UYG'OQ USHLAB TURISH (PING) ----------------- #
-# Render server bergan URL manzili (masalan: https://shaxmat-pro.onrender.com)
-RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "")
+# ==================== TELEGRAM BOT LOGIKASI (AIOGRAM) ==================== #
+bot = Bot(token=BOT_TOKEN) if BOT_TOKEN and "BU_YERGA" not in BOT_TOKEN else None
+dp = Dispatcher() if bot else None
 
+if dp and bot:
+    @dp.message(CommandStart())
+    async def start_handler(message: types.Message):
+        # WebApp ochiladigan manzil
+        web_url = RENDER_EXTERNAL_URL if RENDER_EXTERNAL_URL else "https://telegram.org"
+        
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="♟ Shaxmat o‘ynash (Mini App)",
+                    web_app=WebAppInfo(url=web_url)
+                )
+            ]
+        ])
+        await message.answer(
+            f"Assalomu alaykum, {message.from_user.first_name}!\n\n"
+            "♟ <b>Shaxmat Pro</b> platformasiga xush kelibsiz.\n"
+            "• 5 xil qiyinchilikdagi Stockfish AI bilan o'ynang\n"
+            "• Do'stingiz bilan real-vaqtda onlayn bellashing\n"
+            "• O'yindan so'ng har bir yurishni chuqur tahlil qiling!\n\n"
+            "<i>Muallif: Reyimbayev Baxram Maxsudovich</i>\n\n"
+            "O'yinni boshlash uchun quyidagi tugmani bosing:",
+            reply_markup=kb,
+            parse_mode="HTML"
+        )
+
+# ==================== SERVERNI 24/7 UYG'OQ USHLASH (KEEP-ALIVE) ==================== #
 async def keep_alive_ping():
-    await asyncio.sleep(30) # Server to'liq yonguncha kutish
+    await asyncio.sleep(30)
     while True:
         try:
-            # Agar Render-da ishlayotgan bo'lsa o'ziga, bo'lmasa lokalga signal beradi
             target_url = RENDER_EXTERNAL_URL if RENDER_EXTERNAL_URL else "http://127.0.0.1:10000"
             async with httpx.AsyncClient() as client:
                 await client.get(f"{target_url}/ping", timeout=10.0)
                 print("[Keep-Alive] Ping muvaffaqiyatli yuborildi.")
         except Exception as e:
             print(f"[Keep-Alive] Ping xatosi: {e}")
-        # Har 5 daqiqada (300 soniya) qaytariladi
         await asyncio.sleep(300)
+
+async def start_telegram_bot():
+    if bot and dp:
+        print("[Telegram Bot] Bot ishga tushmoqda...")
+        try:
+            await dp.start_polling(bot)
+        except Exception as e:
+            print(f"[Telegram Bot] Xatolik: {e}")
 
 @app.on_event("startup")
 async def startup_event():
+    # 1. 24/7 uyg'oq turish signalini fonda yoqish
     asyncio.create_task(keep_alive_ping())
+    # 2. Telegram botni fonda ishga tushirish
+    if bot and dp:
+        asyncio.create_task(start_telegram_bot())
 
 @app.get("/ping")
 def ping():
     return {"status": "alive", "message": "Server faol ishlamoqda!"}
 
-# ----------------- 1. AI BILAN O'YIN (5 TA DARAJA) ----------------- #
+# ==================== 1. AI BILAN O'YIN (5 TA DARAJA) ==================== #
 class MoveRequest(BaseModel):
     fen: str
     level: int
@@ -85,7 +132,7 @@ def bot_move(data: MoveRequest):
         "san": board.san(best_move)
     }
 
-# ----------------- 2. O'YIN TAHLILI (STOCKFISH) ----------------- #
+# ==================== 2. O'YIN TAHLILI (STOCKFISH) ==================== #
 class AnalysisRequest(BaseModel):
     moves: List[str]
 
@@ -195,7 +242,7 @@ def analyze_game(data: AnalysisRequest):
         "evaluations": evaluations
     }
 
-# ----------------- 3. REAL-TIME XONALAR (WEBSOCKETS) ----------------- #
+# ==================== 3. REAL-TIME XONALAR (WEBSOCKETS) ==================== #
 rooms: Dict[str, List[WebSocket]] = {}
 
 @app.websocket("/ws/{room_id}")
