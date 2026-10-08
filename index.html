@@ -21,7 +21,12 @@
       --text: #ffffff;
       --text-muted: #9e9c98;
     }
-    * { box-sizing: border-box; user-select: none; }
+    * { 
+      box-sizing: border-box; 
+      user-select: none; 
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
     body {
       display: flex;
       flex-direction: column;
@@ -32,6 +37,7 @@
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       padding: 6px;
+      touch-action: manipulation;
     }
 
     .top-bar {
@@ -95,18 +101,28 @@
       overflow: hidden;
       box-shadow: 0 6px 18px rgba(0,0,0,0.5);
       position: relative;
+      touch-action: none;
     }
 
-    /* TANLANGAN VA ENG YAXSHI YURISH KO'RSATKICHLARI */
+    /* DONA RASMLARINI BOSISHNI TO'G'RIDAN-TO'G'RI KATAKKA O'TKAZISH */
+    #myBoard img {
+      pointer-events: none !important;
+      -webkit-user-drag: none;
+    }
+
+    /* KATAKLARNI BELGILASH */
+    .square-55d63 {
+      cursor: pointer !important;
+    }
+    .highlight-selected {
+      background-color: rgba(241, 196, 15, 0.6) !important;
+    }
     .highlight-best {
       box-shadow: inset 0 0 3px 3px #81b64c !important;
       background-color: rgba(129, 182, 76, 0.4) !important;
     }
-    .highlight-selected {
-      background-color: rgba(241, 196, 15, 0.5) !important;
-    }
     
-    /* YURISH MUMKIN BO'LGAN KATAKLARDAGI NUQTALAR */
+    /* YURISH MUMKIN BO'LGAN KATAKDAGI NUQTALAR */
     .possible-move-dot {
       position: relative;
     }
@@ -116,12 +132,12 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 28%;
-      height: 28%;
-      background: rgba(0, 0, 0, 0.28);
+      width: 30%;
+      height: 30%;
+      background: rgba(46, 204, 113, 0.85);
       border-radius: 50%;
       pointer-events: none;
-      z-index: 5;
+      z-index: 10;
     }
     .possible-capture-ring {
       position: relative;
@@ -134,10 +150,10 @@
       transform: translate(-50%, -50%);
       width: 82%;
       height: 82%;
-      border: 4px solid rgba(0, 0, 0, 0.28);
+      border: 4px solid rgba(231, 76, 60, 0.85);
       border-radius: 50%;
       pointer-events: none;
-      z-index: 5;
+      z-index: 10;
     }
 
     .panel {
@@ -383,7 +399,7 @@
     var userChosenColor = 'white';
     var socket = null;
 
-    // BOSISH (TAP/CLICK) ORQALI YURISH UCHUN HOLAT
+    // BOSISH (TAP/CLICK) HOLATI
     var selectedSquare = null;
 
     function removeHighlights() {
@@ -396,7 +412,6 @@
       if (sq2) $('#myBoard .square-' + sq2).addClass('highlight-best');
     }
 
-    // YURISH YO'LLARINI (NUQTALARNI) CHIQARISH
     function showPossibleMoves(square) {
       var moves = game.moves({ square: square, verbose: true });
       if (moves.length === 0) return;
@@ -459,56 +474,28 @@
       return true;
     }
 
-    // 1. DRAG & DROP (Sudrab yurish imkoniyati)
-    function onDragStart(source, piece, position, orientation) {
-      if (!isMyTurn()) return false;
-      // Faqat o'z donalarini ushlay olish
-      var pieceColor = piece.search(/^b/) !== -1 ? 'b' : 'w';
-      if (pieceColor !== game.turn()) return false;
-
-      selectedSquare = source;
-      removeHighlights();
-      showPossibleMoves(source);
-    }
-
-    function onDrop(source, target) {
-      var success = executeMove(source, target);
-      if (!success) {
-        removeHighlights();
-        selectedSquare = null;
-        return 'snapback';
-      }
-    }
-
-    function onSnapEnd() {
-      board.position(game.fen());
-    }
-
-    // 2. CLICK / TAP ORQALI YURISH
-    $(document).on('click', '#myBoard .square-55d63', function() {
+    // FAQAT BIR MARTA BOSISH (CLICK / TAP) BOSHQARUVI
+    function handleSquareClick(clickedSquare) {
       if (!isMyTurn()) return;
-
-      var clickedSquare = $(this).attr('data-square');
       if (!clickedSquare) return;
 
       var piece = game.get(clickedSquare);
 
-      // Agar avval dona tanlangan bo'lsa va yangi bosilgan katak qonuniy yurish bo'lsa:
+      // 1. Agar avval dona tanlangan bo'lsa va yangi katak bosilsa
       if (selectedSquare) {
         if (selectedSquare === clickedSquare) {
-          // O'sha donani qayta bossa - tanlovni bekor qilish
           selectedSquare = null;
           removeHighlights();
           return;
         }
 
-        var isMoveSuccessful = executeMove(selectedSquare, clickedSquare);
-        if (isMoveSuccessful) {
+        var isDone = executeMove(selectedSquare, clickedSquare);
+        if (isDone) {
           return;
         }
       }
 
-      // Agar o'zining navbatidagi donasini bossa - yo'llarini ko'rsatish
+      // 2. Agar navbati kelgan o'z donasini bossa
       if (piece && piece.color === game.turn()) {
         selectedSquare = clickedSquare;
         removeHighlights();
@@ -517,6 +504,13 @@
         selectedSquare = null;
         removeHighlights();
       }
+    }
+
+    // Katak bosilish hodisalari
+    $(document).on('pointerdown touchstart click', '#myBoard .square-55d63', function(e) {
+      e.preventDefault();
+      var square = $(this).attr('data-square');
+      handleSquareClick(square);
     });
 
     function makeBotMove() {
@@ -729,12 +723,10 @@
       }
     }
 
+    // Doskani sudrashsiz, faqat aniq chizish rejimida ishga tushirish (draggable: false)
     var config = {
-      draggable: true,
+      draggable: false,
       position: 'start',
-      onDragStart: onDragStart,
-      onDrop: onDrop,
-      onSnapEnd: onSnapEnd,
       pieceTheme: 'https://raw.githubusercontent.com/oakmac/chessboardjs/master/website/img/chesspieces/wikipedia/{piece}.png'
     };
 
