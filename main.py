@@ -30,8 +30,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Stockfish dvigatelini aniqlash (Windows va Linux/Render uchun)
-if os.path.exists("/usr/games/stockfish"):
+# Stockfish yo'li (Render Linux va Windows uchun)
+if os.path.exists("./stockfish_linux"):
+    STOCKFISH_PATH = "./stockfish_linux"
+elif os.path.exists("/usr/games/stockfish"):
     STOCKFISH_PATH = "/usr/games/stockfish"
 elif os.path.exists("/usr/bin/stockfish"):
     STOCKFISH_PATH = "/usr/bin/stockfish"
