@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Shaxmat Pro — Reyimbayev Bahrom</title>
+  
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #262421;
+      --panel-bg: #21201d;
+      --card-bg: #302e2b;
+      --border: #403d39;
+      --green: #81b64c;
+      --text: #ffffff;
+      --text-muted: #9e9c98;
+    }
+    * { box-sizing: border-box; user-select: none; }
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 6px;
+    }
+
+    .top-bar {
+      width: calc(86vw + 30px);
+      max-width: 382px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .author-badge {
+      font-size: 11px;
+      font-weight: 600;
+      color: #81b64c;
+      background: rgba(129, 182, 76, 0.15);
+      border: 1px solid rgba(129, 182, 76, 0.3);
+      padding: 3px 8px;
+      border-radius: 12px;
+      letter-spacing: 0.3px;
+    }
+
+    .game-container {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    .eval-bar-wrapper {
+      width: 22px;
+      background: #403d39;
+      border-radius: 4px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      position: relative;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .eval-white-bar {
+      width: 100%;
+      height: 50%;
+      background: #ffffff;
+      transition: height 0.3s ease;
+    }
+    .eval-score-text {
+      position: absolute;
+      width: 100%;
+      text-align: center;
+      font-size: 10px;
+      font-weight: 800;
+      color: #000;
+      bottom: 4px;
+      z-index: 2;
+    }
+
+    #myBoard {
+      width: 86vw;
+      max-width: 350px;
+      border-radius: 4px;
+      overflow: hidden;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+    }
+
+    .highlight-best {
+      box-shadow: inset 0 0 3px 3px #81b64c !important;
+      background-color: rgba(129, 182, 76, 0.4) !important;
+    }
+
+    .panel {
+      width: calc(86vw + 30px);
+      max-width: 382px;
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .status-line {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .controls-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    select, input, .btn {
+      flex: 1;
+      padding: 8px 10px;
+      background: var(--card-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      outline: none;
+    }
+
+    .btn {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-green {
+      background: var(--green);
+      color: #fff;
+      border: none;
+      font-weight: 700;
+    }
+    .btn-analysis {
+      background: #4575b4;
+      color: #fff;
+      border: none;
+    }
+
+    .nav-arrows-row {
+      display: flex;
+      gap: 6px;
+      background: var(--panel-bg);
+      padding: 4px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .nav-arrow-btn {
+      flex: 1;
+      padding: 6px 0;
+      font-size: 15px;
+      font-weight: bold;
+      background: var(--card-bg);
+      color: #fff;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .nav-arrow-btn:hover {
+      background: #403d39;
+    }
+
+    .moves-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      height: 85px;
+      overflow-y: auto;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .move-row {
+      display: flex;
+      align-items: center;
+      font-size: 13px;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+    .move-row:nth-child(odd) {
+      background: rgba(255,255,255,0.03);
+    }
+    .move-num {
+      width: 32px;
+      color: var(--text-muted);
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .move-cell {
+      flex: 1;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .move-cell:hover, .move-cell.active {
+      background: #403d39;
+    }
+    .move-badge {
+      font-size: 10px;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-weight: bold;
+    }
+
+    .analysis-comment-card {
+      display: none;
+      background: var(--card-bg);
+      border-left: 4px solid var(--green);
+      padding: 8px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .best-move-hint {
+      margin-top: 4px;
+      padding: 4px 6px;
+      background: rgba(129, 182, 76, 0.15);
+      border-radius: 4px;
+      color: #a3e635;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .footer-author {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #9e9c98;
+      text-align: center;
+      letter-spacing: 0.5px;
+    }
+    .footer-author span {
+      color: #ffffff;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TEPADAGI MUALLIF VA SARLAVHA PANELI -->
+  <div class="top-bar">
+    <span style="font-size: 13px; font-weight: 700; color: #dfe6e9;">♟ TELEGRAM SHAXMAT</span>
+    <span class="author-badge">Dasturchi: Baxram Maxsudovich</span>
+  </div>
+
+  <div class="game-container">
+    <div class="eval-bar-wrapper">
+      <div class="eval-white-bar" id="evalBar"></div>
+      <div class="eval-score-text" id="evalScore">0.0</div>
+    </div>
+    <div id="myBoard"></div>
+  </div>
+
+  <div class="panel">
+    <div class="status-line">
+      <span id="statusText" style="color: var(--green);">Oqlar yurishi</span>
+      <span id="accSummary" style="color: var(--text-muted); font-size: 11px;"></span>
+    </div>
+
+    <div class="analysis-comment-card" id="analysisCommentCard">
+      <div id="commentHeader" style="font-weight: 700; color: var(--green);">AI Sharhi:</div>
+      <div id="commentText">Yurishni tanlang...</div>
+      <div class="best-move-hint" id="bestMoveHint" style="display: none;"></div>
+    </div>
+
+    <div class="controls-row">
+      <select id="userColor" onchange="resetGame()">
+        <option value="white">Siz: Oqlar</option>
+        <option value="black">Siz: Qoralar</option>
+      </select>
+
+      <select id="gameMode" onchange="switchMode()">
+        <option value="bot">AI Botga qarshi</option>
+        <option value="online">2 kishi (Online)</option>
+      </select>
+
+      <select id="botLevel">
+        <option value="1">1-Daraja</option>
+        <option value="2">2-Daraja</option>
+        <option value="3" selected>3-Daraja</option>
+        <option value="4">4-Daraja</option>
+        <option value="5">5-Daraja</option>
+      </select>
+    </div>
+
+    <div class="controls-row" id="onlineControls" style="display: none;">
+      <input type="text" id="roomId" placeholder="Xona ID">
+      <button class="btn btn-green" onclick="connectOnline()">Ulanish</button>
+    </div>
+
+    <div class="nav-arrows-row">
+      <button class="nav-arrow-btn" onclick="stepToStart()" title="Eng boshiga">|‹</button>
+      <button class="nav-arrow-btn" onclick="stepBackward()" title="Bitta orqaga">‹</button>
+      <button class="nav-arrow-btn" onclick="stepForward()" title="Bitta oldinga">›</button>
+      <button class="nav-arrow-btn" onclick="stepToEnd()" title="Eng oxiriga">›|</button>
+    </div>
+
+    <div class="moves-card" id="movesContainer">
+      <div style="color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 25px;">Hali yurishlar yo'q</div>
+    </div>
+
+    <div class="controls-row">
+      <button class="btn btn-green" onclick="resetGame()">Yangi o‘yin</button>
+      <button class="btn btn-analysis" onclick="runAnalysis()">📊 Tahlil qilish</button>
+    </div>
+  </div>
+
+  <!-- PASTKI MUALLIFLIK QISMI -->
+  <div class="footer-author">
+    Loyiha muallifi: <span>Reyimbayev Baxram Maxsudovich</span>
+  </div>
+
+  <script>
+    if (window.Telegram && window.Telegram.WebApp) {
+      window.Telegram.WebApp.ready();
+      window.Telegram.WebApp.expand();
+    }
+
+    var board = null;
+    var game = new Chess();
+    var moveHistory = [];
+    var currentMoveIndex = -1;
+    var analysisData = null;
+    var userChosenColor = 'white';
+    var socket = null;
+
+    function removeHighlights() {
+      $('#myBoard .square-55d63').removeClass('highlight-best');
+    }
+
+    function highlightSquares(sq1, sq2) {
+      removeHighlights();
+      if (sq1) $('#myBoard .square-' + sq1).addClass('highlight-best');
+      if (sq2) $('#myBoard .square-' + sq2).addClass('highlight-best');
+    }
+
+    function switchMode() {
+      var mode = $('#gameMode').val();
+      if (mode === 'online') {
+        $('#botLevel').hide();
+        $('#userColor').hide();
+        $('#onlineControls').show();
+      } else {
+        $('#botLevel').show();
+        $('#userColor').show();
+        $('#onlineControls').hide();
+        if (socket) { socket.close(); socket = null; }
+      }
+      resetGame();
+    }
+
+    function onDragStart(source, piece, position, orientation) {
+      if (game.game_over()) return false;
+      var mode = $('#gameMode').val();
+      if (mode === 'bot') {
+        var myTurnChar = (userChosenColor === 'white') ? 'w' : 'b';
+        if (game.turn() !== myTurnChar) return false;
+      }
+    }
+
+    function onDrop(source, target) {
+      var move = game.move({ from: source, to: target, promotion: 'q' });
+      if (move === null) return 'snapback';
+
+      moveHistory.push(move.san);
+      currentMoveIndex = moveHistory.length - 1;
+      removeHighlights();
+      renderMovesList();
+      updateStatus();
+
+      var mode = $('#gameMode').val();
+      if (mode === 'bot' && !game.game_over()) {
+        makeBotMove();
+      } else if (mode === 'online' && socket) {
+        socket.send(JSON.stringify({ from: source, to: target }));
+      }
+    }
+
+    function onSnapEnd() {
+      board.position(game.fen());
+    }
+
+    function makeBotMove() {
+      var level = parseInt($('#botLevel').val());
+      $('#statusText').html('Bot o‘ylamoqda...').css('color', '#f39c12');
+
+      fetch('/api/bot-move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fen: game.fen(), level: level })
+      })
+      .then(res => res.json())
+      .then(data => {
+        var botMove = game.move({ from: data.from, to: data.to, promotion: 'q' });
+        if (botMove) {
+          moveHistory.push(botMove.san);
+          currentMoveIndex = moveHistory.length - 1;
+          board.position(game.fen());
+          renderMovesList();
+          updateStatus();
+        }
+      });
+    }
+
+    function connectOnline() {
+      var room = $('#roomId').val().trim() || 'default';
+      var wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/' + room;
+      socket = new WebSocket(wsUrl);
+
+      socket.onmessage = function(event) {
+        var msg = JSON.parse(event.data);
+        if (msg.type === 'start') {
+          userChosenColor = msg.role;
+          board.orientation(userChosenColor);
+          $('#statusText').html('Siz: ' + (userChosenColor === 'white' ? 'Oqlar' : 'Qoralar'));
+        } else if (msg.from && msg.to) {
+          var move = game.move({ from: msg.from, to: msg.to, promotion: 'q' });
+          if (move) {
+            moveHistory.push(move.san);
+            currentMoveIndex = moveHistory.length - 1;
+            board.position(game.fen());
+            renderMovesList();
+            updateStatus();
+          }
+        }
+      };
+    }
+
+    function renderMovesList() {
+      var container = $('#movesContainer');
+      container.empty();
+
+      if (moveHistory.length === 0) {
+        container.html('<div style="color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 25px;">Hali yurishlar yo\'q</div>');
+        return;
+      }
+
+      for (var i = 0; i < moveHistory.length; i += 2) {
+        var moveNum = (i / 2) + 1;
+        var whiteMove = moveHistory[i];
+        var blackMove = moveHistory[i + 1] || '';
+
+        var html = '<div class="move-row">' +
+          '<div class="move-num">' + moveNum + '.</div>' +
+          '<div class="move-cell" id="move-' + i + '" onclick="goToMove(' + i + ')">' + whiteMove + '</div>' +
+          '<div class="move-cell" id="move-' + (i + 1) + '" onclick="goToMove(' + (i + 1) + ')">' + blackMove + '</div>' +
+        '</div>';
+
+        container.append(html);
+      }
+      container.scrollTop(container[0].scrollHeight);
+    }
+
+    function updateStatus() {
+      var status = '';
+      var moveColor = (game.turn() === 'w') ? 'Oqlar' : 'Qoralar';
+
+      if (game.in_checkmate()) {
+        status = 'Mot! ' + moveColor + ' yutqazdi.';
+      } else if (game.in_draw()) {
+        status = 'Durang!';
+      } else {
+        status = moveColor + ' yurishi';
+        if (game.in_check()) status += ' (Shoh!)';
+      }
+      $('#statusText').html(status).css('color', 'var(--green)');
+    }
+
+    function setEvalBar(scoreNumber) {
+      var score = parseFloat(scoreNumber) || 0.0;
+      var percent = 50 + (score * 5);
+      percent = Math.max(5, Math.min(95, percent));
+      $('#evalBar').css('height', percent + '%');
+      $('#evalScore').text((score > 0 ? '+' : '') + score.toFixed(1));
+    }
+
+    function runAnalysis() {
+      if (moveHistory.length === 0) {
+        alert('Tahlil uchun avval bir nechta yurish bajaring!');
+        return;
+      }
+      $('#statusText').html('Stockfish chuqur tahlil qilmoqda...').css('color', '#f39c12');
+
+      fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ moves: moveHistory })
+      })
+      .then(res => res.json())
+      .then(data => {
+        analysisData = data;
+        $('#accSummary').text('Aniqlik: Oqlar ' + data.white_accuracy + '% | Qoralar ' + data.black_accuracy + '%');
+        $('#analysisCommentCard').show();
+        updateStatus();
+
+        data.evaluations.forEach((ev, idx) => {
+          var badgeColor = '#2ecc71';
+          if (ev.cat === 'inaccuracy') badgeColor = '#f39c12';
+          if (ev.cat === 'mistake') badgeColor = '#e67e22';
+          if (ev.cat === 'blunder') badgeColor = '#e74c3c';
+
+          $('#move-' + idx).html(ev.san + ' <span class="move-badge" style="background:' + badgeColor + '33; color:' + badgeColor + '">' + ev.symbol + '</span>');
+        });
+
+        goToMove(data.evaluations.length - 1);
+      });
+    }
+
+    function goToMove(index) {
+      if (index < 0 || index >= moveHistory.length) return;
+      currentMoveIndex = index;
+
+      $('.move-cell').removeClass('active');
+      $('#move-' + index).addClass('active');
+
+      if (analysisData && analysisData.evaluations[index]) {
+        var ev = analysisData.evaluations[index];
+        board.position(ev.fen);
+        setEvalBar(ev.eval);
+
+        $('#commentHeader').text(ev.san + ' (' + ev.symbol + ') — ' + ev.eval);
+        $('#commentText').text(ev.comment);
+
+        if (ev.cat === 'mistake' || ev.cat === 'blunder' || ev.cat === 'inaccuracy') {
+          $('#bestMoveHint').show().html('💡 <b>Eng yaxshi yurish:</b> ' + ev.best_san);
+          highlightSquares(ev.best_from, ev.best_to);
+        } else {
+          $('#bestMoveHint').hide();
+          removeHighlights();
+        }
+      } else {
+        var tempGame = new Chess();
+        for (var i = 0; i <= index; i++) {
+          tempGame.move(moveHistory[i]);
+        }
+        board.position(tempGame.fen());
+        removeHighlights();
+      }
+    }
+
+    function stepToStart() {
+      if (moveHistory.length === 0) return;
+      board.start();
+      currentMoveIndex = -1;
+      $('.move-cell').removeClass('active');
+      removeHighlights();
+      setEvalBar(0.0);
+    }
+
+    function stepBackward() {
+      if (currentMoveIndex > 0) {
+        goToMove(currentMoveIndex - 1);
+      } else if (currentMoveIndex === 0) {
+        stepToStart();
+      }
+    }
+
+    function stepForward() {
+      if (currentMoveIndex < moveHistory.length - 1) {
+        goToMove(currentMoveIndex + 1);
+      }
+    }
+
+    function stepToEnd() {
+      if (moveHistory.length > 0) {
+        goToMove(moveHistory.length - 1);
+      }
+    }
+
+    function resetGame() {
+      game.reset();
+      moveHistory = [];
+      currentMoveIndex = -1;
+      analysisData = null;
+      removeHighlights();
+      setEvalBar(0.0);
+      $('#analysisCommentCard').hide();
+      $('#accSummary').text('');
+
+      userChosenColor = $('#userColor').val();
+      board.orientation(userChosenColor);
+      board.start();
+      renderMovesList();
+      updateStatus();
+
+      var mode = $('#gameMode').val();
+      if (mode === 'bot' && userChosenColor === 'black') {
+        makeBotMove();
+      }
+    }
+
+    var config = {
+      draggable: true,
+      position: 'start',
+      onDragStart: onDragStart,
+      onDrop: onDrop,
+      onSnapEnd: onSnapEnd,
+      pieceTheme: 'https://raw.githubusercontent.com/oakmac/chessboardjs/master/website/img/chesspieces/wikipedia/{piece}.png'
+    };
+
+    board = Chessboard('myBoard', config);
+    resetGame();
+  </script>
+</body>
+</html>
