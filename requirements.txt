@@ -4,3 +4,4 @@ websockets
 python-chess
 pydantic
 httpx
+aiogram
